@@ -418,27 +418,24 @@ class PostgreSQLDDLGenerator:
     def get_sequence_privileges(self):
         """Get privileges granted on sequences in the schema."""
         query = """
-            SELECT 
-                c.relname AS sequence_name,
-                array_agg(DISTINCT pr.grantee) AS grantees,
-                array_agg(DISTINCT pr.privilege_type) AS privileges
-            FROM pg_class c
-            JOIN pg_namespace n ON n.oid = c.relnamespace
-            LEFT JOIN LATERAL (
+            WITH sequence_acls AS (
                 SELECT 
-                    acl.grantee,
-                    acl.privilege_type
-                FROM information_schema.usage_privileges acl
-                WHERE acl.object_schema = n.nspname
-                AND acl.object_name = c.relname
-                AND acl.object_type = 'SEQUENCE'
-                AND acl.grantee != 'PUBLIC'
-            ) pr ON true
-            WHERE n.nspname = %s
-            AND c.relkind = 'S'
-            AND pr.grantee IS NOT NULL
-            GROUP BY c.relname
-            ORDER BY c.relname;
+                    c.relname AS sequence_name,
+                    (aclexplode(COALESCE(c.relacl, acldefault('S', c.relowner)))).grantee::regrole::text AS grantee,
+                    (aclexplode(COALESCE(c.relacl, acldefault('S', c.relowner)))).privilege_type AS privilege_type
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = %s
+                AND c.relkind = 'S'
+            )
+            SELECT 
+                sequence_name,
+                array_agg(DISTINCT grantee) AS grantees,
+                array_agg(DISTINCT privilege_type) AS privileges
+            FROM sequence_acls
+            WHERE grantee NOT IN ('PUBLIC', current_user)
+            GROUP BY sequence_name
+            ORDER BY sequence_name;
         """
         self.cursor.execute(query, (self.schema,))
         return self.cursor.fetchall()
@@ -446,28 +443,30 @@ class PostgreSQLDDLGenerator:
     def get_function_privileges(self):
         """Get privileges granted on functions in the schema."""
         query = """
-            SELECT 
-                p.proname AS function_name,
-                pg_get_function_identity_arguments(p.oid) AS function_args,
-                array_agg(DISTINCT pr.grantee) AS grantees
-            FROM pg_proc p
-            JOIN pg_namespace n ON n.oid = p.pronamespace
-            LEFT JOIN LATERAL (
+            WITH function_acls AS (
                 SELECT 
-                    (aclexplode(p.proacl)).grantee::regrole::text AS grantee
-                FROM pg_proc p2
-                WHERE p2.oid = p.oid
-                AND (aclexplode(p.proacl)).grantee::regrole::text != 'PUBLIC'
-            ) pr ON true
-            WHERE n.nspname = %s
-            AND p.prokind = 'f'
-            AND pr.grantee IS NOT NULL
-            AND EXISTS (
-                SELECT 1 FROM pg_trigger t
-                WHERE t.tgfoid = p.oid
+                    p.oid,
+                    p.proname AS function_name,
+                    pg_get_function_identity_arguments(p.oid) AS function_args,
+                    (aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner)))).grantee::regrole::text AS grantee,
+                    (aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner)))).privilege_type AS privilege_type
+                FROM pg_proc p
+                JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = %s
+                AND p.prokind = 'f'
+                AND EXISTS (
+                    SELECT 1 FROM pg_trigger t
+                    WHERE t.tgfoid = p.oid
+                )
             )
-            GROUP BY p.proname, p.oid
-            ORDER BY p.proname;
+            SELECT 
+                function_name,
+                function_args,
+                array_agg(DISTINCT grantee) AS grantees
+            FROM function_acls
+            WHERE grantee NOT IN ('PUBLIC', current_user)
+            GROUP BY function_name, function_args
+            ORDER BY function_name;
         """
         self.cursor.execute(query, (self.schema,))
         return self.cursor.fetchall()
@@ -499,13 +498,13 @@ class PostgreSQLDDLGenerator:
             grantees = seq['grantees']
             privileges = seq['privileges']
             
-            # Remove None values
-            grantees = [g for g in grantees if g]
-            privileges = [p for p in privileges if p]
+            # Remove None values and filter out empty strings
+            grantees = [g for g in grantees if g and g.strip()]
+            privileges = [p for p in privileges if p and p.strip()]
             
             if grantees and privileges:
+                privs = ', '.join(sorted(set(privileges)))
                 for grantee in grantees:
-                    privs = ', '.join(sorted(set(privileges)))
                     ddl += f"GRANT {privs} ON SEQUENCE {self.schema}.{seq_name} TO {grantee};\n"
         
         return ddl
@@ -520,8 +519,8 @@ class PostgreSQLDDLGenerator:
             func_args = func['function_args'] or ''
             grantees = func['grantees']
             
-            # Remove None values
-            grantees = [g for g in grantees if g]
+            # Remove None values and filter out empty strings
+            grantees = [g for g in grantees if g and g.strip()]
             
             if grantees:
                 for grantee in grantees:
@@ -555,13 +554,13 @@ class PostgreSQLDDLGenerator:
             grantees = seq['grantees']
             privileges = seq['privileges']
             
-            # Remove None values
-            grantees = [g for g in grantees if g]
-            privileges = [p for p in privileges if p]
+            # Remove None values and filter out empty strings
+            grantees = [g for g in grantees if g and g.strip()]
+            privileges = [p for p in privileges if p and p.strip()]
             
             if grantees and privileges:
+                privs = ', '.join(sorted(set(privileges)))
                 for grantee in grantees:
-                    privs = ', '.join(sorted(set(privileges)))
                     ddl += f"REVOKE {privs} ON SEQUENCE {self.schema}.{seq_name} FROM {grantee};\n"
         
         return ddl
@@ -576,8 +575,8 @@ class PostgreSQLDDLGenerator:
             func_args = func['function_args'] or ''
             grantees = func['grantees']
             
-            # Remove None values
-            grantees = [g for g in grantees if g]
+            # Remove None values and filter out empty strings
+            grantees = [g for g in grantees if g and g.strip()]
             
             if grantees:
                 for grantee in grantees:
