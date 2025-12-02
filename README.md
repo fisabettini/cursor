@@ -19,6 +19,11 @@ A Python script that generates DDL (Data Definition Language) statements for Pos
 - **Indexes**: All indexes except primary key indexes
 - **Triggers**: All trigger definitions
 - **Trigger Functions**: All functions used by triggers
+- **Privileges**: REVOKE and GRANT statements for:
+  - Tables (SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER)
+  - Sequences (USAGE, SELECT, UPDATE)
+  - Trigger Functions (EXECUTE)
+  - WITH GRANT OPTION support
 - **Comments**: Table, column, index, and trigger comments
 
 ## Requirements
@@ -115,6 +120,14 @@ The script generates DDL in the following order:
 3. **Constraints** - Primary keys, foreign keys, unique, and check constraints
 4. **Indexes** - All indexes (excluding primary key indexes)
 5. **Triggers** - All trigger definitions
+6. **REVOKE Privileges** - Remove existing privileges (for clean recreation)
+   - Trigger functions
+   - Sequences
+   - Tables
+7. **GRANT Privileges** - Restore privileges
+   - Trigger functions (EXECUTE)
+   - Sequences (USAGE, SELECT, UPDATE)
+   - Tables (SELECT, INSERT, UPDATE, DELETE, etc.)
 
 ## Special Features
 
@@ -161,6 +174,37 @@ All database comments are preserved in the generated DDL:
 ```sql
 COMMENT ON TABLE users IS 'Application users';
 COMMENT ON COLUMN users.email IS 'User email address (must be unique)';
+```
+
+### Privileges and Grants
+
+The script captures and generates REVOKE/GRANT statements for all privileges:
+
+**Tables:**
+```sql
+-- Revoke existing privileges
+REVOKE SELECT, INSERT, UPDATE ON TABLE myschema.users FROM app_user;
+
+-- Grant privileges back
+GRANT SELECT, INSERT, UPDATE ON TABLE myschema.users TO app_user;
+GRANT SELECT ON TABLE myschema.users TO readonly_user;
+```
+
+**Sequences (for SERIAL columns):**
+```sql
+REVOKE USAGE ON SEQUENCE myschema.users_id_seq FROM app_user;
+GRANT USAGE, SELECT ON SEQUENCE myschema.users_id_seq TO app_user;
+```
+
+**Functions:**
+```sql
+REVOKE EXECUTE ON FUNCTION myschema.update_modified_timestamp() FROM app_user;
+GRANT EXECUTE ON FUNCTION myschema.update_modified_timestamp() TO app_user;
+```
+
+**WITH GRANT OPTION:**
+```sql
+GRANT SELECT ON TABLE myschema.users TO admin_user WITH GRANT OPTION;
 ```
 
 ## Error Handling

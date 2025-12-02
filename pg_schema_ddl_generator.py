@@ -398,6 +398,193 @@ class PostgreSQLDDLGenerator:
         
         return ddl
 
+    def get_table_privileges(self, table_name):
+        """Get privileges granted on a table."""
+        query = """
+            SELECT 
+                grantee,
+                string_agg(privilege_type, ', ' ORDER BY privilege_type) AS privileges,
+                is_grantable
+            FROM information_schema.table_privileges
+            WHERE table_schema = %s
+            AND table_name = %s
+            AND grantee != 'PUBLIC'
+            GROUP BY grantee, is_grantable
+            ORDER BY grantee;
+        """
+        self.cursor.execute(query, (self.schema, table_name))
+        return self.cursor.fetchall()
+
+    def get_sequence_privileges(self):
+        """Get privileges granted on sequences in the schema."""
+        query = """
+            SELECT 
+                c.relname AS sequence_name,
+                array_agg(DISTINCT pr.grantee) AS grantees,
+                array_agg(DISTINCT pr.privilege_type) AS privileges
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN LATERAL (
+                SELECT 
+                    acl.grantee,
+                    acl.privilege_type
+                FROM information_schema.usage_privileges acl
+                WHERE acl.object_schema = n.nspname
+                AND acl.object_name = c.relname
+                AND acl.object_type = 'SEQUENCE'
+                AND acl.grantee != 'PUBLIC'
+            ) pr ON true
+            WHERE n.nspname = %s
+            AND c.relkind = 'S'
+            AND pr.grantee IS NOT NULL
+            GROUP BY c.relname
+            ORDER BY c.relname;
+        """
+        self.cursor.execute(query, (self.schema,))
+        return self.cursor.fetchall()
+
+    def get_function_privileges(self):
+        """Get privileges granted on functions in the schema."""
+        query = """
+            SELECT 
+                p.proname AS function_name,
+                pg_get_function_identity_arguments(p.oid) AS function_args,
+                array_agg(DISTINCT pr.grantee) AS grantees
+            FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            LEFT JOIN LATERAL (
+                SELECT 
+                    (aclexplode(p.proacl)).grantee::regrole::text AS grantee
+                FROM pg_proc p2
+                WHERE p2.oid = p.oid
+                AND (aclexplode(p.proacl)).grantee::regrole::text != 'PUBLIC'
+            ) pr ON true
+            WHERE n.nspname = %s
+            AND p.prokind = 'f'
+            AND pr.grantee IS NOT NULL
+            AND EXISTS (
+                SELECT 1 FROM pg_trigger t
+                WHERE t.tgfoid = p.oid
+            )
+            GROUP BY p.proname, p.oid
+            ORDER BY p.proname;
+        """
+        self.cursor.execute(query, (self.schema,))
+        return self.cursor.fetchall()
+
+    def generate_table_grants_ddl(self, table_name):
+        """Generate GRANT statements for a table."""
+        privileges = self.get_table_privileges(table_name)
+        ddl = ""
+        
+        if not privileges:
+            return ddl
+        
+        for priv in privileges:
+            grantee = priv['grantee']
+            privs = priv['privileges']
+            grant_option = " WITH GRANT OPTION" if priv['is_grantable'] == 'YES' else ""
+            
+            ddl += f"GRANT {privs} ON TABLE {self.schema}.{table_name} TO {grantee}{grant_option};\n"
+        
+        return ddl
+
+    def generate_sequence_grants_ddl(self):
+        """Generate GRANT statements for sequences."""
+        sequences = self.get_sequence_privileges()
+        ddl = ""
+        
+        for seq in sequences:
+            seq_name = seq['sequence_name']
+            grantees = seq['grantees']
+            privileges = seq['privileges']
+            
+            # Remove None values
+            grantees = [g for g in grantees if g]
+            privileges = [p for p in privileges if p]
+            
+            if grantees and privileges:
+                for grantee in grantees:
+                    privs = ', '.join(sorted(set(privileges)))
+                    ddl += f"GRANT {privs} ON SEQUENCE {self.schema}.{seq_name} TO {grantee};\n"
+        
+        return ddl
+
+    def generate_function_grants_ddl(self):
+        """Generate GRANT statements for trigger functions."""
+        functions = self.get_function_privileges()
+        ddl = ""
+        
+        for func in functions:
+            func_name = func['function_name']
+            func_args = func['function_args'] or ''
+            grantees = func['grantees']
+            
+            # Remove None values
+            grantees = [g for g in grantees if g]
+            
+            if grantees:
+                for grantee in grantees:
+                    ddl += f"GRANT EXECUTE ON FUNCTION {self.schema}.{func_name}({func_args}) TO {grantee};\n"
+        
+        return ddl
+
+    def generate_revoke_table_ddl(self, table_name):
+        """Generate REVOKE statements for a table."""
+        privileges = self.get_table_privileges(table_name)
+        ddl = ""
+        
+        if not privileges:
+            return ddl
+        
+        for priv in privileges:
+            grantee = priv['grantee']
+            privs = priv['privileges']
+            
+            ddl += f"REVOKE {privs} ON TABLE {self.schema}.{table_name} FROM {grantee};\n"
+        
+        return ddl
+
+    def generate_revoke_sequence_ddl(self):
+        """Generate REVOKE statements for sequences."""
+        sequences = self.get_sequence_privileges()
+        ddl = ""
+        
+        for seq in sequences:
+            seq_name = seq['sequence_name']
+            grantees = seq['grantees']
+            privileges = seq['privileges']
+            
+            # Remove None values
+            grantees = [g for g in grantees if g]
+            privileges = [p for p in privileges if p]
+            
+            if grantees and privileges:
+                for grantee in grantees:
+                    privs = ', '.join(sorted(set(privileges)))
+                    ddl += f"REVOKE {privs} ON SEQUENCE {self.schema}.{seq_name} FROM {grantee};\n"
+        
+        return ddl
+
+    def generate_revoke_function_ddl(self):
+        """Generate REVOKE statements for trigger functions."""
+        functions = self.get_function_privileges()
+        ddl = ""
+        
+        for func in functions:
+            func_name = func['function_name']
+            func_args = func['function_args'] or ''
+            grantees = func['grantees']
+            
+            # Remove None values
+            grantees = [g for g in grantees if g]
+            
+            if grantees:
+                for grantee in grantees:
+                    ddl += f"REVOKE EXECUTE ON FUNCTION {self.schema}.{func_name}({func_args}) FROM {grantee};\n"
+        
+        return ddl
+
     def generate_schema_ddl(self):
         """Generate complete DDL for the schema."""
         print(f"-- DDL for schema: {self.schema}")
@@ -459,6 +646,63 @@ class PostgreSQLDDLGenerator:
             if trigger_ddl:
                 print(f"-- Triggers for table: {table_name}")
                 print(trigger_ddl)
+        
+        # Generate REVOKE statements
+        print("\n-- =============================================")
+        print("-- REVOKE Privileges")
+        print("-- =============================================\n")
+        
+        # Revoke function privileges
+        func_revoke_ddl = self.generate_revoke_function_ddl()
+        if func_revoke_ddl:
+            print("-- Revoke privileges on trigger functions")
+            print(func_revoke_ddl)
+        
+        # Revoke sequence privileges
+        seq_revoke_ddl = self.generate_revoke_sequence_ddl()
+        if seq_revoke_ddl:
+            print("-- Revoke privileges on sequences")
+            print(seq_revoke_ddl)
+        
+        # Revoke table privileges
+        has_table_revokes = False
+        for table in tables:
+            table_name = table['table_name']
+            revoke_ddl = self.generate_revoke_table_ddl(table_name)
+            if revoke_ddl:
+                if not has_table_revokes:
+                    print("-- Revoke privileges on tables")
+                    has_table_revokes = True
+                print(revoke_ddl, end='')
+        
+        # Generate GRANT statements
+        print("\n-- =============================================")
+        print("-- GRANT Privileges")
+        print("-- =============================================\n")
+        
+        # Grant function privileges
+        func_grant_ddl = self.generate_function_grants_ddl()
+        if func_grant_ddl:
+            print("-- Grant privileges on trigger functions")
+            print(func_grant_ddl)
+        
+        # Grant sequence privileges
+        seq_grant_ddl = self.generate_sequence_grants_ddl()
+        if seq_grant_ddl:
+            print("-- Grant privileges on sequences")
+            print(seq_grant_ddl)
+        
+        # Grant table privileges
+        has_table_grants = False
+        for table in tables:
+            table_name = table['table_name']
+            grant_ddl = self.generate_table_grants_ddl(table_name)
+            if grant_ddl:
+                if not has_table_grants:
+                    print("-- Grant privileges on tables")
+                    has_table_grants = True
+                print(f"-- Grants for table: {table_name}")
+                print(grant_ddl)
 
 
 def main():
