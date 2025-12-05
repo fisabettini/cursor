@@ -7,7 +7,7 @@
 pip install -r requirements.txt
 
 # 2. Run the script
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s public -o output.sql
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s public -o output.sql
 
 # 3. Review the generated DDL
 cat output.sql
@@ -77,14 +77,14 @@ python generate_schema_ddl.py \
 ### Environment Variable for Password
 ```bash
 export PGPASSWORD=secret
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s public
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s public
 ```
 
 ### Multiple Schemas
 ```bash
 for schema in public app_data reporting; do
   python generate_schema_ddl.py \
-    -h localhost -d mydb -u postgres \
+    -H localhost -d mydb -u postgres \
     -s $schema -o ${schema}.sql
 done
 ```
@@ -148,7 +148,7 @@ The script generates DDL in this specific order:
 ```bash
 # 1. Export current schema
 python generate_schema_ddl.py \
-  -h prod-db.company.com \
+  -H prod-db.company.com \
   -d maindb \
   -u readonly_user \
   -s production_schema \
@@ -158,15 +158,15 @@ python generate_schema_ddl.py \
 less backup_20251204.sql
 
 # 3. Restore if needed
-psql -h prod-db.company.com -d maindb -U admin -f backup_20251204.sql
+psql -H prod-db.company.com -d maindb -U admin -f backup_20251204.sql
 ```
 
 ### Scenario: Compare Development and Production
 
 ```bash
 # Export from both environments
-python generate_schema_ddl.py -h dev-db -d app -u user -s public -o dev.sql
-python generate_schema_ddl.py -h prod-db -d app -u user -s public -o prod.sql
+python generate_schema_ddl.py -H dev-db -d app -u user -s public -o dev.sql
+python generate_schema_ddl.py -H prod-db -d app -u user -s public -o prod.sql
 
 # Compare
 diff -u dev.sql prod.sql

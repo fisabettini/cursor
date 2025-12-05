@@ -11,8 +11,14 @@ and handles identity column sequences as serial/bigserial types.
 import argparse
 import sys
 from typing import List, Dict, Set, Tuple
-import psycopg2
-from psycopg2.extras import RealDictCursor
+
+# Import psycopg2 conditionally - only when actually running, not for --help
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    psycopg2 = None
+    RealDictCursor = None
 
 
 class PostgreSQLDDLGenerator:
@@ -839,17 +845,17 @@ def main():
         epilog="""
 Examples:
   # Generate DDL for 'public' schema
-  %(prog)s -h localhost -d mydb -u postgres -s public
+  %(prog)s -H localhost -d mydb -u postgres -s public
 
   # Generate DDL and save to file
-  %(prog)s -h localhost -d mydb -u postgres -s public -o schema.sql
+  %(prog)s -H localhost -d mydb -u postgres -s public -o schema.sql
 
   # Using environment variables for password
-  PGPASSWORD=secret %(prog)s -h localhost -d mydb -u postgres -s public
+  PGPASSWORD=secret %(prog)s -H localhost -d mydb -u postgres -s public
         """
     )
     
-    parser.add_argument('-h', '--host', required=True,
+    parser.add_argument('-H', '--host', required=True,
                        help='Database host')
     parser.add_argument('-p', '--port', default='5432',
                        help='Database port (default: 5432)')
@@ -865,6 +871,12 @@ Examples:
                        help='Output file (default: stdout)')
     
     args = parser.parse_args()
+    
+    # Check if psycopg2 is available
+    if psycopg2 is None:
+        print("Error: psycopg2 is not installed.", file=sys.stderr)
+        print("Please install it using: pip install psycopg2-binary", file=sys.stderr)
+        sys.exit(1)
     
     # Get password from args or environment
     import os

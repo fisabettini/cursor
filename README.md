@@ -2,6 +2,8 @@
 
 A Python script that generates complete DDL (Data Definition Language) statements for a PostgreSQL schema, including all related objects.
 
+> **Note**: Use `-H` (capital H) for the host argument. The lowercase `-h` is reserved for `--help`.
+
 ## Features
 
 - **Complete Schema Export**: Generates DDL for all objects in a specified schema:
@@ -53,20 +55,20 @@ pip install psycopg2-binary
 ### Basic Usage
 
 ```bash
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s public
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s public
 ```
 
 ### Save to File
 
 ```bash
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s myschema -o schema_ddl.sql
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s myschema -o schema_ddl.sql
 ```
 
 ### Using Environment Variable for Password
 
 ```bash
 export PGPASSWORD=your_password
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s public
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s public
 ```
 
 ### Command Line Arguments
@@ -96,7 +98,7 @@ python generate_schema_ddl.py \
 
 ```bash
 PGPASSWORD=secret python generate_schema_ddl.py \
-  -h db.example.com \
+  -H db.example.com \
   -p 5432 \
   -d production \
   -u readonly_user \

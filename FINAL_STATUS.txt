@@ -4,7 +4,7 @@
 ║                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 
-VERSION: 1.1.0 (Enhanced)
+VERSION: 1.1.1 (Bug Fix Release)
 DATE: December 4, 2025
 STATUS: ✅ COMPLETE AND TESTED
 
@@ -79,14 +79,16 @@ Examples & Testing:
 💻 USAGE
 
 Basic:
-  python generate_schema_ddl.py -h HOST -d DB -u USER -s SCHEMA
+  python generate_schema_ddl.py -H HOST -d DB -u USER -s SCHEMA
 
 With output file:
-  python generate_schema_ddl.py -h HOST -d DB -u USER -s SCHEMA -o output.sql
+  python generate_schema_ddl.py -H HOST -d DB -u USER -s SCHEMA -o output.sql
 
 With password:
   export PGPASSWORD=secret
-  python generate_schema_ddl.py -h HOST -d DB -u USER -s SCHEMA
+  python generate_schema_ddl.py -H HOST -d DB -u USER -s SCHEMA
+
+NOTE: Use -H (capital H) for host, not -h (which is reserved for --help)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

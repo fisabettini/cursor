@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Version 1.1.1 - December 4, 2025
+
+### Bug Fixes
+
+#### Fixed argparse Conflict
+- ✅ Changed host argument from `-h` to `-H` to avoid conflict with argparse's built-in `-h/--help`
+- ✅ Now `--help` works correctly without requiring psycopg2 installation
+- ✅ Updated all documentation to reflect the change
+
+**Breaking Change**: If you were using `-h localhost`, you must now use `-H localhost` (or `--host localhost`)
+
 ## Version 1.1.0 - December 4, 2025
 
 ### New Features
@@ -189,7 +200,7 @@ This script was designed to be:
 pip install -r requirements.txt
 
 # Run
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s public -o output.sql
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s public -o output.sql
 
 # Test
 python test_script.py

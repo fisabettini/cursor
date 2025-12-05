@@ -14,19 +14,19 @@ python generate_schema_ddl.py -h HOST -d DATABASE -u USER -s SCHEMA [-o OUTPUT]
 
 ### 1. Interactive (prompts for password)
 ```bash
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s public
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s public
 ```
 
 ### 2. With Environment Variable
 ```bash
 export PGPASSWORD=mypassword
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s public -o output.sql
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s public -o output.sql
 ```
 
 ### 3. Remote Database
 ```bash
 python generate_schema_ddl.py \
-  -h db.example.com \
+  -H db.example.com \
   -p 5433 \
   -d production \
   -u readonly_user \
@@ -38,7 +38,7 @@ python generate_schema_ddl.py \
 ```bash
 for schema in public app reporting; do
   python generate_schema_ddl.py \
-    -h localhost -d mydb -u postgres \
+    -H localhost -d mydb -u postgres \
     -s $schema -o ${schema}.sql
 done
 ```
@@ -47,7 +47,7 @@ done
 
 | Argument | Short | Required | Default | Description |
 |----------|-------|----------|---------|-------------|
-| --host | -h | Yes | - | Database hostname or IP |
+| --host | -H | Yes | - | Database hostname or IP |
 | --port | -p | No | 5432 | Database port |
 | --database | -d | Yes | - | Database name |
 | --user | -u | Yes | - | Database user |
@@ -152,7 +152,7 @@ yum install python3-psycopg2      # RedHat/CentOS
 ### Backup Before Migration
 ```bash
 python generate_schema_ddl.py \
-  -h prod-db.company.com \
+  -H prod-db.company.com \
   -d maindb \
   -u backup_user \
   -s production_schema \
@@ -162,10 +162,10 @@ python generate_schema_ddl.py \
 ### Compare Environments
 ```bash
 # Export from DEV
-python generate_schema_ddl.py -h dev-db -d app -u admin -s public -o dev.sql
+python generate_schema_ddl.py -H dev-db -d app -u admin -s public -o dev.sql
 
 # Export from PROD
-python generate_schema_ddl.py -h prod-db -d app -u admin -s public -o prod.sql
+python generate_schema_ddl.py -H prod-db -d app -u admin -s public -o prod.sql
 
 # Compare
 diff dev.sql prod.sql
@@ -174,7 +174,7 @@ diff dev.sql prod.sql
 ### Recreate Schema in Test
 ```bash
 # Export from production
-python generate_schema_ddl.py -h prod-db -d app -u user -s public -o schema.sql
+python generate_schema_ddl.py -H prod-db -d app -u user -s public -o schema.sql
 
 # Import to test
 psql -h test-db -d testapp -U user -f schema.sql
@@ -191,18 +191,18 @@ psql -h test-db -d testapp -U user -f schema.sql
 
 ### Stdout (default)
 ```bash
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s public > output.sql
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s public > output.sql
 ```
 
 ### Direct to File (recommended)
 ```bash
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s public -o output.sql
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s public -o output.sql
 ```
 
 ### With Timestamp
 ```bash
 OUTPUT="schema_$(date +%Y%m%d_%H%M%S).sql"
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s public -o "$OUTPUT"
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s public -o "$OUTPUT"
 ```
 
 ## Return Codes

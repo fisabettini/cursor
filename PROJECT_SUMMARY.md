@@ -153,14 +153,14 @@ python generate_schema_ddl.py \
 ### With Environment Variable
 ```bash
 export PGPASSWORD=secret
-python generate_schema_ddl.py -h localhost -d mydb -u postgres -s myschema
+python generate_schema_ddl.py -H localhost -d mydb -u postgres -s myschema
 ```
 
 ### Multiple Schemas
 ```bash
 for schema in public app_data reporting; do
   python generate_schema_ddl.py \
-    -h localhost -d mydb -u postgres \
+    -H localhost -d mydb -u postgres \
     -s $schema -o ${schema}_schema.sql
 done
 ```
@@ -258,7 +258,7 @@ pip install -r requirements.txt
 
 # Run the script
 python generate_schema_ddl.py \
-  -h localhost \
+  -H localhost \
   -d mydb \
   -u postgres \
   -s myschema \
