@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## Version 1.1.0 - December 4, 2025
+
+### New Features
+
+#### Functions and Procedures Support
+- ✅ Added `get_functions()` method to extract regular (non-trigger) functions
+- ✅ Added `get_procedures()` method to extract stored procedures (PostgreSQL 11+)
+- ✅ Functions and procedures now included in DDL output
+- ✅ Preserves function/procedure comments
+- ✅ Handles function signatures correctly for COMMENT statements
+- ✅ Automatic PostgreSQL version detection for procedure support
+
+#### Updated Output Order
+DDL generation now includes:
+1. Schema creation
+2. Trigger functions
+3. **Regular functions** (NEW)
+4. **Procedures** (NEW)
+5. Sequences
+6. Tables
+7. Foreign keys
+8. Indexes
+9. Triggers
+10. Views
+
+### Improvements
+- Enhanced documentation to include functions and procedures
+- Updated example output with sample functions and procedures
+- Improved test coverage for new features
+
 ## Version 1.0.0 - December 4, 2025
 
 ### Initial Release

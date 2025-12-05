@@ -6,6 +6,8 @@ A Python script that generates complete DDL (Data Definition Language) statement
 
 - **Complete Schema Export**: Generates DDL for all objects in a specified schema:
   - Trigger functions
+  - Regular functions (non-trigger)
+  - Procedures (PostgreSQL 11+)
   - Sequences (standalone, non-serial)
   - Tables with all columns
   - Primary keys, unique constraints, check constraints
@@ -120,15 +122,17 @@ The generated DDL follows this order:
 
 1. **Schema Creation**: `CREATE SCHEMA IF NOT EXISTS`
 2. **Trigger Functions**: All functions that return `trigger` type
-3. **Sequences**: Standalone sequences (excluding serial/bigserial sequences)
-4. **Tables**: In dependency order
+3. **Functions**: Regular functions (non-trigger)
+4. **Procedures**: Stored procedures (PostgreSQL 11+)
+5. **Sequences**: Standalone sequences (excluding serial/bigserial sequences)
+6. **Tables**: In dependency order
    - Column definitions with proper data types (serial/bigserial when applicable)
    - Primary keys, unique constraints, check constraints
    - Column and table comments
-5. **Foreign Key Constraints**: Added after all tables are created
-6. **Indexes**: Regular indexes (excluding PK and unique constraint indexes)
-7. **Triggers**: All triggers on tables
-8. **Views**: All views in the schema
+7. **Foreign Key Constraints**: Added after all tables are created
+8. **Indexes**: Regular indexes (excluding PK and unique constraint indexes)
+9. **Triggers**: All triggers on tables
+10. **Views**: All views in the schema
 
 ## How Serial/BigSerial Detection Works
 

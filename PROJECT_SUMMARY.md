@@ -78,19 +78,29 @@ The script generates DDL in this specific order:
 
 1. **Schema Creation** - CREATE SCHEMA IF NOT EXISTS
 2. **Trigger Functions** - Functions that return trigger type
-3. **Standalone Sequences** - Sequences not owned by columns
-4. **Tables** - In dependency order, without foreign keys
+3. **Regular Functions** - Non-trigger functions
+4. **Procedures** - Stored procedures (PostgreSQL 11+)
+5. **Standalone Sequences** - Sequences not owned by columns
+6. **Tables** - In dependency order, without foreign keys
    - Column definitions (with serial types)
    - Primary keys
    - Unique constraints
    - Check constraints
    - Comments
-5. **Foreign Key Constraints** - Added after all tables exist
-6. **Indexes** - Regular indexes (excluding PK/unique indexes)
-7. **Triggers** - All triggers on tables
-8. **Views** - All views in the schema
+7. **Foreign Key Constraints** - Added after all tables exist
+8. **Indexes** - Regular indexes (excluding PK/unique indexes)
+9. **Triggers** - All triggers on tables
+10. **Views** - All views in the schema
 
 ### 5. Object-Specific Handling
+
+#### Functions & Procedures
+- **Trigger Functions**: Functions returning trigger type
+- **Regular Functions**: All other functions (SQL, PL/pgSQL, etc.)
+- **Procedures**: Stored procedures (PostgreSQL 11+)
+- Preserves function language and attributes (IMMUTABLE, STABLE, VOLATILE)
+- Includes function/procedure comments
+- Proper signature handling for COMMENT statements
 
 #### Tables
 - Columns with proper data types
@@ -164,6 +174,9 @@ done
 - `get_serial_sequences()` - Finds sequences owned by columns
 - `get_column_sequence_info()` - Maps columns to their sequences
 - `get_column_default_type()` - Converts integer+sequence to serial
+- `get_trigger_functions()` - Extracts trigger functions
+- `get_functions()` - Extracts regular (non-trigger) functions
+- `get_procedures()` - Extracts stored procedures (PostgreSQL 11+)
 - `get_table_dependencies()` - Builds foreign key dependency graph
 - `topological_sort()` - Sorts tables by dependencies
 - `generate_table_ddl()` - Creates table DDL

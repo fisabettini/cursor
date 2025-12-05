@@ -17,6 +17,8 @@ def test_script_structure():
         'get_serial_sequences',
         'get_column_sequence_info',
         'get_trigger_functions',
+        'get_functions',
+        'get_procedures',
         'get_standalone_sequences',
         'get_table_columns',
         'get_table_constraints',
@@ -52,7 +54,8 @@ def test_script_structure():
     print("  - Handles serial/bigserial types")
     print("  - Topological sorting for table dependencies")
     print("  - Foreign key constraints added after tables")
-    print("  - Trigger functions, sequences, indexes, triggers, views")
+    print("  - Trigger functions, regular functions, and procedures")
+    print("  - Sequences, indexes, triggers, views")
     print("  - Column and table comments preserved")
     
     return True

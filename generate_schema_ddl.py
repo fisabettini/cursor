@@ -121,6 +121,107 @@ class PostgreSQLDDLGenerator:
         
         return ddl_statements
     
+    def get_functions(self) -> List[str]:
+        """
+        Generate DDL for regular functions (non-trigger, non-procedure) in the schema.
+        
+        Returns:
+            List of CREATE FUNCTION DDL statements
+        """
+        query = """
+            SELECT 
+                p.proname as function_name,
+                pg_get_functiondef(p.oid) as definition,
+                pg_catalog.obj_description(p.oid, 'pg_proc') as comment
+            FROM pg_proc p
+            JOIN pg_namespace n ON p.pronamespace = n.oid
+            WHERE n.nspname = %s
+              AND p.prorettype != 'trigger'::regtype
+              AND p.prokind = 'f'  -- 'f' for function, 'p' for procedure
+            ORDER BY p.proname
+        """
+        self.cursor.execute(query, (self.schema_name,))
+        
+        ddl_statements = []
+        for row in self.cursor.fetchall():
+            ddl_statements.append(f"-- Function: {self.schema_name}.{row['function_name']}")
+            ddl_statements.append(row['definition'] + ";")
+            
+            # Add comment if exists
+            if row['comment']:
+                escaped_comment = row['comment'].replace("'", "''")
+                # Get function signature for COMMENT ON statement
+                self.cursor.execute("""
+                    SELECT pg_get_function_identity_arguments(p.oid) as args
+                    FROM pg_proc p
+                    JOIN pg_namespace n ON p.pronamespace = n.oid
+                    WHERE n.nspname = %s AND p.proname = %s
+                    LIMIT 1
+                """, (self.schema_name, row['function_name']))
+                args_row = self.cursor.fetchone()
+                if args_row:
+                    func_signature = f"{self.schema_name}.{row['function_name']}({args_row['args']})"
+                    ddl_statements.append(f"COMMENT ON FUNCTION {func_signature} IS '{escaped_comment}';")
+            
+            ddl_statements.append("")
+        
+        return ddl_statements
+    
+    def get_procedures(self) -> List[str]:
+        """
+        Generate DDL for procedures in the schema (PostgreSQL 11+).
+        
+        Returns:
+            List of CREATE PROCEDURE DDL statements
+        """
+        # Check PostgreSQL version for procedure support
+        self.cursor.execute("SELECT current_setting('server_version_num')::integer as version")
+        version = self.cursor.fetchone()['version']
+        
+        if version < 110000:  # Procedures available from PostgreSQL 11
+            return []
+        
+        query = """
+            SELECT 
+                p.proname as procedure_name,
+                pg_get_functiondef(p.oid) as definition,
+                pg_catalog.obj_description(p.oid, 'pg_proc') as comment
+            FROM pg_proc p
+            JOIN pg_namespace n ON p.pronamespace = n.oid
+            WHERE n.nspname = %s
+              AND p.prokind = 'p'  -- 'p' for procedure
+            ORDER BY p.proname
+        """
+        self.cursor.execute(query, (self.schema_name,))
+        
+        ddl_statements = []
+        for row in self.cursor.fetchall():
+            ddl_statements.append(f"-- Procedure: {self.schema_name}.{row['procedure_name']}")
+            # Replace FUNCTION with PROCEDURE in the definition
+            definition = row['definition'].replace('CREATE OR REPLACE FUNCTION', 'CREATE OR REPLACE PROCEDURE', 1)
+            definition = definition.replace('RETURNS void', '', 1)  # Procedures don't have RETURNS
+            ddl_statements.append(definition + ";")
+            
+            # Add comment if exists
+            if row['comment']:
+                escaped_comment = row['comment'].replace("'", "''")
+                # Get procedure signature for COMMENT ON statement
+                self.cursor.execute("""
+                    SELECT pg_get_function_identity_arguments(p.oid) as args
+                    FROM pg_proc p
+                    JOIN pg_namespace n ON p.pronamespace = n.oid
+                    WHERE n.nspname = %s AND p.proname = %s
+                    LIMIT 1
+                """, (self.schema_name, row['procedure_name']))
+                args_row = self.cursor.fetchone()
+                if args_row:
+                    proc_signature = f"{self.schema_name}.{row['procedure_name']}({args_row['args']})"
+                    ddl_statements.append(f"COMMENT ON PROCEDURE {proc_signature} IS '{escaped_comment}';")
+            
+            ddl_statements.append("")
+        
+        return ddl_statements
+    
     def get_standalone_sequences(self, serial_sequences: Set[str]) -> List[str]:
         """
         Generate DDL for sequences that are not part of serial/bigserial columns.
@@ -643,26 +744,45 @@ class PostgreSQLDDLGenerator:
         ddl_statements.append(f"-- Create schema if not exists")
         ddl_statements.append(f"CREATE SCHEMA IF NOT EXISTS {self.schema_name};")
         ddl_statements.append("")
+        
+        # 1. Trigger Functions
         ddl_statements.append("-- ======================================")
         ddl_statements.append("-- TRIGGER FUNCTIONS")
         ddl_statements.append("-- ======================================")
         ddl_statements.append("")
-        
-        # 1. Trigger Functions
         ddl_statements.extend(self.get_trigger_functions())
+        
+        # 2. Functions (non-trigger)
+        ddl_statements.append("-- ======================================")
+        ddl_statements.append("-- FUNCTIONS")
+        ddl_statements.append("-- ======================================")
+        ddl_statements.append("")
+        ddl_statements.extend(self.get_functions())
+        
+        # 3. Procedures
+        ddl_statements.append("-- ======================================")
+        ddl_statements.append("-- PROCEDURES")
+        ddl_statements.append("-- ======================================")
+        ddl_statements.append("")
+        procedures = self.get_procedures()
+        if procedures:
+            ddl_statements.extend(procedures)
+        else:
+            ddl_statements.append("-- No procedures found (or PostgreSQL < 11)")
+            ddl_statements.append("")
         
         # Get serial sequences to exclude them
         serial_sequences = self.get_serial_sequences()
         column_sequence_info = self.get_column_sequence_info()
         
-        # 2. Standalone Sequences
+        # 4. Standalone Sequences
         ddl_statements.append("-- ======================================")
         ddl_statements.append("-- SEQUENCES")
         ddl_statements.append("-- ======================================")
         ddl_statements.append("")
         ddl_statements.extend(self.get_standalone_sequences(serial_sequences))
         
-        # 3. Tables (without foreign keys)
+        # 5. Tables (without foreign keys)
         ddl_statements.append("-- ======================================")
         ddl_statements.append("-- TABLES")
         ddl_statements.append("-- ======================================")
@@ -678,7 +798,7 @@ class PostgreSQLDDLGenerator:
                                        include_foreign_keys=False)
             )
         
-        # 4. Foreign Key Constraints
+        # 6. Foreign Key Constraints
         ddl_statements.append("-- ======================================")
         ddl_statements.append("-- FOREIGN KEY CONSTRAINTS")
         ddl_statements.append("-- ======================================")
@@ -687,21 +807,21 @@ class PostgreSQLDDLGenerator:
         foreign_keys = self.get_foreign_key_constraints()
         ddl_statements.extend(self.generate_foreign_key_ddl(foreign_keys))
         
-        # 5. Indexes
+        # 7. Indexes
         ddl_statements.append("-- ======================================")
         ddl_statements.append("-- INDEXES")
         ddl_statements.append("-- ======================================")
         ddl_statements.append("")
         ddl_statements.extend(self.get_indexes())
         
-        # 6. Triggers
+        # 8. Triggers
         ddl_statements.append("-- ======================================")
         ddl_statements.append("-- TRIGGERS")
         ddl_statements.append("-- ======================================")
         ddl_statements.append("")
         ddl_statements.extend(self.get_triggers())
         
-        # 7. Views
+        # 9. Views
         ddl_statements.append("-- ======================================")
         ddl_statements.append("-- VIEWS")
         ddl_statements.append("-- ======================================")

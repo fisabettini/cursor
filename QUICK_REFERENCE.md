@@ -62,16 +62,18 @@ The script generates DDL in this order:
 ```
 1. Schema creation
 2. Trigger functions
-3. Standalone sequences
-4. Tables (in dependency order)
+3. Regular functions
+4. Procedures (PostgreSQL 11+)
+5. Standalone sequences
+6. Tables (in dependency order)
    - Columns with serial/bigserial
    - Primary keys
    - Unique constraints
    - Check constraints
-5. Foreign key constraints
-6. Indexes
-7. Triggers
-8. Views
+7. Foreign key constraints
+8. Indexes
+9. Triggers
+10. Views
 ```
 
 ## Key Features
@@ -90,6 +92,9 @@ Automatically converts:
 ### ✓ All Object Types
 - Tables, columns, constraints
 - Sequences (standalone only)
+- Trigger functions
+- Regular functions (non-trigger)
+- Procedures (PostgreSQL 11+)
 - Indexes (excluding PK/unique)
 - Triggers and trigger functions
 - Views with definitions

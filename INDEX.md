@@ -43,6 +43,9 @@ cat output.sql
 - Foreign key constraints (properly ordered)
 - Indexes (excluding PK/unique indexes)
 - Sequences (standalone only)
+- Trigger functions
+- Regular functions (non-trigger)
+- Procedures (PostgreSQL 11+)
 - Triggers and trigger functions
 - Views with definitions
 - Comments on all objects
@@ -117,21 +120,25 @@ The script generates DDL in this specific order:
    ↓
 2. Trigger Functions (functions that return 'trigger')
    ↓
-3. Standalone Sequences (excluding serial sequences)
+3. Functions (regular, non-trigger functions)
    ↓
-4. Tables (in dependency order)
+4. Procedures (stored procedures, PostgreSQL 11+)
+   ↓
+5. Standalone Sequences (excluding serial sequences)
+   ↓
+6. Tables (in dependency order)
    - Columns with serial/bigserial types
    - Primary keys and unique constraints
    - Check constraints
    - Table and column comments
    ↓
-5. Foreign Key Constraints (after all tables exist)
+7. Foreign Key Constraints (after all tables exist)
    ↓
-6. Indexes (excluding PK/unique constraint indexes)
+8. Indexes (excluding PK/unique constraint indexes)
    ↓
-7. Triggers (all triggers on tables)
+9. Triggers (all triggers on tables)
    ↓
-8. Views (with complete definitions)
+10. Views (with complete definitions)
 ```
 
 ## 💡 Example Workflow

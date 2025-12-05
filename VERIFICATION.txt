@@ -35,6 +35,8 @@ Core Features Verified:
 4. ✓ Complete Object Coverage
    - Schema creation
    - Trigger functions
+   - Regular functions (non-trigger)
+   - Procedures (PostgreSQL 11+)
    - Standalone sequences
    - Tables (with all columns and constraints)
    - Foreign key constraints
@@ -57,10 +59,12 @@ Implementation Details:
 Classes:
   ✓ PostgreSQLDDLGenerator - Main class
 
-Key Methods (16 total):
+Key Methods (18 total):
   ✓ get_serial_sequences()
   ✓ get_column_sequence_info()
   ✓ get_trigger_functions()
+  ✓ get_functions()
+  ✓ get_procedures()
   ✓ get_standalone_sequences()
   ✓ get_column_default_type()
   ✓ get_table_columns()
@@ -148,6 +152,8 @@ Requirements Met:
 ✓ Generates DDL for sequences
 ✓ Generates DDL for views
 ✓ Generates DDL for trigger functions
+✓ Generates DDL for regular functions
+✓ Generates DDL for procedures
 ✓ Foreign keys reference previously created primary keys
 ✓ Serial/bigserial instead of separate sequence management
 ✓ Works with specific schema

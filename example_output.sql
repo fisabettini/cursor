@@ -23,6 +23,97 @@ END;
 $function$;
 
 -- ======================================
+-- FUNCTIONS
+-- ======================================
+
+-- Function: myschema.calculate_discount
+CREATE OR REPLACE FUNCTION myschema.calculate_discount(order_total numeric, customer_tier integer)
+ RETURNS numeric
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    discount_rate numeric;
+BEGIN
+    -- Calculate discount based on customer tier
+    discount_rate := CASE 
+        WHEN customer_tier = 1 THEN 0.05
+        WHEN customer_tier = 2 THEN 0.10
+        WHEN customer_tier = 3 THEN 0.15
+        ELSE 0.0
+    END;
+    
+    RETURN order_total * discount_rate;
+END;
+$function$;
+COMMENT ON FUNCTION myschema.calculate_discount(numeric, integer) IS 'Calculates discount amount based on order total and customer tier';
+
+-- Function: myschema.get_user_post_count
+CREATE OR REPLACE FUNCTION myschema.get_user_post_count(user_id_param bigint)
+ RETURNS integer
+ LANGUAGE sql
+ STABLE
+AS $function$
+    SELECT COUNT(*)::integer
+    FROM myschema.posts
+    WHERE user_id = user_id_param
+    AND status = 'published';
+$function$;
+
+-- Function: myschema.validate_email
+CREATE OR REPLACE FUNCTION myschema.validate_email(email_address text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+BEGIN
+    RETURN email_address ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z]{2,}$';
+END;
+$function$;
+
+-- ======================================
+-- PROCEDURES
+-- ======================================
+
+-- Procedure: myschema.archive_old_posts
+CREATE OR REPLACE PROCEDURE myschema.archive_old_posts(days_old integer)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    UPDATE myschema.posts
+    SET status = 'archived'
+    WHERE created_at < CURRENT_DATE - days_old
+      AND status = 'published';
+    
+    RAISE NOTICE 'Archived % posts', (SELECT COUNT(*) FROM myschema.posts WHERE status = 'archived');
+    
+    COMMIT;
+END;
+$function$;
+COMMENT ON PROCEDURE myschema.archive_old_posts(integer) IS 'Archives posts older than specified number of days';
+
+-- Procedure: myschema.cleanup_inactive_users
+CREATE OR REPLACE PROCEDURE myschema.cleanup_inactive_users()
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    deleted_count integer;
+BEGIN
+    -- Delete users who haven't been active in 2 years
+    WITH deleted AS (
+        DELETE FROM myschema.users
+        WHERE is_active = false
+          AND modified_at < CURRENT_DATE - INTERVAL '2 years'
+        RETURNING user_id
+    )
+    SELECT COUNT(*) INTO deleted_count FROM deleted;
+    
+    RAISE NOTICE 'Cleaned up % inactive users', deleted_count;
+    
+    COMMIT;
+END;
+$function$;
+
+-- ======================================
 -- SEQUENCES
 -- ======================================
 
