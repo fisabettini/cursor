@@ -4,9 +4,13 @@ A comprehensive Python script to generate DDL (Data Definition Language) stateme
 
 ## Features
 
+- ✅ **Extensions**: Exports installed PostgreSQL extensions
 - ✅ **User-Defined Types**: Exports ENUM, COMPOSITE, and DOMAIN types
+- ✅ **Sequences**: Exports standalone sequences (not tied to serial columns)
 - ✅ **Tables**: Both regular and partitioned tables with all columns
+- ✅ **Foreign Tables**: Exports foreign data wrapper tables with options
 - ✅ **Serial Types**: Automatically converts integer columns with sequences to `serial`, `bigserial`, or `smallserial`
+- ✅ **Indexes**: Exports all table indexes (including unique, btree, gin, gist, etc.)
 - ✅ **Primary Keys**: Inline primary key constraints
 - ✅ **Foreign Keys**: With ON UPDATE/ON DELETE actions
 - ✅ **Dependency Management**: Automatically sorts tables by foreign key dependencies
@@ -16,7 +20,8 @@ A comprehensive Python script to generate DDL (Data Definition Language) stateme
 - ✅ **Procedures**: Exports stored procedure definitions
 - ✅ **Views**: Exports regular view definitions
 - ✅ **Materialized Views**: Exports materialized view definitions
-- ✅ **Comments**: Preserves table, column, type, function, procedure, and view comments
+- ✅ **Grants/Permissions**: Exports all GRANT statements for tables, views, sequences, etc.
+- ✅ **Comments**: Preserves comments on all database objects
 
 ## Requirements
 
@@ -241,26 +246,30 @@ GROUP BY DATE_TRUNC('month', sale_date);
 
 The generated DDL is organized in the following order:
 
-1. **User-Defined Types** (ENUMs, Composite Types, Domains)
-2. **Functions** (all functions including trigger functions)
-3. **Procedures** (stored procedures)
-4. **Tables** (sorted by dependencies)
+1. **Extensions** (PostgreSQL extensions)
+2. **User-Defined Types** (ENUMs, Composite Types, Domains)
+3. **Sequences** (standalone sequences)
+4. **Functions** (all functions including trigger functions)
+5. **Procedures** (stored procedures)
+6. **Tables** (sorted by dependencies)
    - Regular tables
    - Partitioned tables
    - Partitions
-5. **Foreign Keys** (all constraints)
-6. **Triggers** (all triggers)
-7. **Views** (regular views)
-8. **Materialized Views** (materialized views)
+7. **Foreign Tables** (foreign data wrapper tables)
+8. **Indexes** (all indexes except PK/FK)
+9. **Foreign Keys** (all constraints)
+10. **Triggers** (all triggers)
+11. **Views** (regular views)
+12. **Materialized Views** (materialized views)
+13. **Grants and Permissions** (all GRANT statements)
 
 ## Limitations
 
 - Does not export:
-  - Indexes (other than PK/FK)
-  - Sequences that are not tied to serial columns
-  - Grants and permissions
   - Table inheritance (non-partition)
-  - Extensions
+  - Row-level security policies
+  - Event triggers
+  - Publications/Subscriptions (logical replication)
 
 ## Contributing
 

@@ -152,10 +152,10 @@ CREATE MATERIALIZED VIEW sales_summary AS SELECT ...
 
 | Metric | Value |
 |--------|-------|
-| Total Files | 14 |
-| Lines of Code | ~1,100 (main script) |
-| Lines of Documentation | ~2,500 |
-| Total Size | ~125 KB |
+| Total Files | 16 |
+| Lines of Code | ~1,400 (main script) |
+| Lines of Documentation | ~3,000 |
+| Total Size | ~150 KB |
 | Python Dependencies | 1 (psycopg2) |
 | PostgreSQL Version | 18 (compatible with 10+) |
 | Python Version | 3.6+ |

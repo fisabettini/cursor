@@ -159,17 +159,22 @@ Multi-column primary keys supported!
 
 The DDL is organized in the optimal order:
 
-1. **User-Defined Types** (ENUMs, Composite, Domains)
-2. **Functions** (all functions including trigger functions)
-3. **Procedures** (stored procedures)
-4. **Tables** (sorted by dependencies)
+1. **Extensions** (PostgreSQL extensions)
+2. **User-Defined Types** (ENUMs, Composite, Domains)
+3. **Sequences** (standalone sequences)
+4. **Functions** (all functions including trigger functions)
+5. **Procedures** (stored procedures)
+6. **Tables** (sorted by dependencies)
    - Regular tables
    - Partitioned tables
    - Partitions
-5. **Foreign Keys** (all constraints)
-6. **Triggers** (all triggers)
-7. **Views** (regular views)
-8. **Materialized Views** (materialized views)
+7. **Foreign Tables** (FDW tables)
+8. **Indexes** (all indexes)
+9. **Foreign Keys** (all constraints)
+10. **Triggers** (all triggers)
+11. **Views** (regular views)
+12. **Materialized Views** (materialized views)
+13. **Grants and Permissions** (all GRANT statements)
 
 ---
 
@@ -202,11 +207,10 @@ python postgres_ddl_generator.py -H localhost -d mydb -U postgres
 
 The script focuses on schema structure and does not export:
 
-- ❌ Indexes (except PK/FK)
-- ❌ Standalone sequences
-- ❌ Grants/Permissions
+- ❌ Row-level security policies
+- ❌ Event triggers
+- ❌ Publications/Subscriptions
 - ❌ Table inheritance (non-partition)
-- ❌ Extensions
 
 These can be added in future versions if needed!
 
