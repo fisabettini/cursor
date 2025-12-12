@@ -130,14 +130,32 @@ ALTER TABLE orders
     ON DELETE RESTRICT;
 ```
 
+### 6. Functions and Procedures ⭐
+```sql
+-- Function
+CREATE FUNCTION calculate_total(order_id int) RETURNS numeric ...
+
+-- Procedure
+CREATE PROCEDURE process_order(user_id bigint, amount numeric) ...
+```
+
+### 7. Views and Materialized Views ⭐
+```sql
+-- View
+CREATE VIEW user_summary AS SELECT ...
+
+-- Materialized View
+CREATE MATERIALIZED VIEW sales_summary AS SELECT ...
+```
+
 ## 📊 Statistics
 
 | Metric | Value |
 |--------|-------|
-| Total Files | 13 |
-| Lines of Code | ~1,000 (main script) |
+| Total Files | 14 |
+| Lines of Code | ~1,100 (main script) |
 | Lines of Documentation | ~2,500 |
-| Total Size | ~120 KB |
+| Total Size | ~125 KB |
 | Python Dependencies | 1 (psycopg2) |
 | PostgreSQL Version | 18 (compatible with 10+) |
 | Python Version | 3.6+ |
@@ -219,8 +237,14 @@ Full support for PostgreSQL's declarative partitioning including RANGE, LIST, an
 ### 4. Type System Support
 Complete support for user-defined types including ENUMs, COMPOSITEs, and DOMAINs with all attributes and constraints.
 
-### 5. Comment Preservation
-All comments on tables, columns, types, and functions are preserved in the generated DDL.
+### 5. Functions and Procedures
+All functions and stored procedures are exported with complete definitions, language specifications, and volatility settings.
+
+### 6. Views and Materialized Views
+Regular and materialized views are exported with their complete SELECT statements.
+
+### 7. Comment Preservation
+All comments on tables, columns, types, functions, procedures, and views are preserved in the generated DDL.
 
 ## 🎯 Use Cases
 
@@ -256,8 +280,6 @@ Then generate DDL to verify all features work correctly.
 
 Not included (by design):
 - Indexes (other than PK/FK)
-- Views and Materialized Views
-- Stored Procedures (only functions)
 - Standalone sequences
 - Grants and permissions
 - Extensions
@@ -296,6 +318,8 @@ The script successfully handles:
 - ✅ Primary and foreign keys
 - ✅ Dependency management (PK/FK)
 - ✅ Triggers and functions
+- ✅ Stored procedures
+- ✅ Views and materialized views
 - ✅ Serial type conversion from sequences
 
 ## 📁 Project Structure

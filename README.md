@@ -12,8 +12,11 @@ A comprehensive Python script to generate DDL (Data Definition Language) stateme
 - ✅ **Dependency Management**: Automatically sorts tables by foreign key dependencies
 - ✅ **Partitioned Tables**: Handles both partitioned tables and their partitions
 - ✅ **Triggers**: Exports trigger definitions
-- ✅ **Functions**: Exports function definitions used by triggers
-- ✅ **Comments**: Preserves table, column, type, and function comments
+- ✅ **Functions**: Exports all function definitions (including trigger functions)
+- ✅ **Procedures**: Exports stored procedure definitions
+- ✅ **Views**: Exports regular view definitions
+- ✅ **Materialized Views**: Exports materialized view definitions
+- ✅ **Comments**: Preserves table, column, type, function, procedure, and view comments
 
 ## Requirements
 
@@ -166,21 +169,40 @@ CREATE DOMAIN "public"."email" AS text
     CHECK (VALUE ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
 ```
 
-### Functions and Triggers
+### Functions, Procedures, and Triggers
 
-Exports complete function definitions and trigger definitions:
+Exports complete function and procedure definitions, plus trigger definitions:
 
 ```sql
 -- Function
-CREATE FUNCTION update_modified_timestamp()
-RETURNS trigger
+CREATE FUNCTION calculate_user_total(p_user_id BIGINT)
+RETURNS NUMERIC
 LANGUAGE plpgsql
+STABLE
 AS $function$
+DECLARE
+    v_total NUMERIC;
 BEGIN
-    NEW.modified_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
+    SELECT COALESCE(SUM(total_amount), 0)
+    INTO v_total
+    FROM orders
+    WHERE user_id = p_user_id;
+    
+    RETURN v_total;
 END;
 $function$;
+
+-- Procedure
+CREATE PROCEDURE process_order(p_user_id BIGINT, p_amount NUMERIC)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO orders (user_id, total_amount, status)
+    VALUES (p_user_id, p_amount, 'pending');
+    
+    RAISE NOTICE 'Order created for user % with amount %', p_user_id, p_amount;
+END;
+$$;
 
 -- Trigger
 CREATE TRIGGER users_update_timestamp 
@@ -189,29 +211,56 @@ CREATE TRIGGER users_update_timestamp
     EXECUTE FUNCTION update_modified_timestamp();
 ```
 
+### Views and Materialized Views
+
+Exports view definitions:
+
+```sql
+-- Regular View
+CREATE VIEW "public"."user_order_summary" AS
+SELECT 
+    u.id AS user_id,
+    u.username,
+    COUNT(o.id) AS total_orders,
+    SUM(o.total_amount) AS total_spent
+FROM users u
+LEFT JOIN orders o ON o.user_id = u.id
+GROUP BY u.id, u.username;
+
+-- Materialized View
+CREATE MATERIALIZED VIEW "public"."sales_summary" AS
+SELECT 
+    DATE_TRUNC('month', sale_date) AS month,
+    COUNT(*) AS total_sales,
+    SUM(amount) AS total_amount
+FROM sales
+GROUP BY DATE_TRUNC('month', sale_date);
+```
+
 ## Output Structure
 
 The generated DDL is organized in the following order:
 
 1. **User-Defined Types** (ENUMs, Composite Types, Domains)
-2. **Functions** (used by triggers)
-3. **Tables** (sorted by dependencies)
+2. **Functions** (all functions including trigger functions)
+3. **Procedures** (stored procedures)
+4. **Tables** (sorted by dependencies)
    - Regular tables
    - Partitioned tables
    - Partitions
-4. **Foreign Keys** (all constraints)
-5. **Triggers** (all triggers)
+5. **Foreign Keys** (all constraints)
+6. **Triggers** (all triggers)
+7. **Views** (regular views)
+8. **Materialized Views** (materialized views)
 
 ## Limitations
 
 - Does not export:
   - Indexes (other than PK/FK)
-  - Views
-  - Materialized Views
-  - Procedures (only functions)
   - Sequences that are not tied to serial columns
   - Grants and permissions
   - Table inheritance (non-partition)
+  - Extensions
 
 ## Contributing
 

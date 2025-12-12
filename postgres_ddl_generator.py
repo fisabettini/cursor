@@ -290,6 +290,57 @@ class PostgresDDLGenerator:
         self.cursor.execute(query, (self.schema,))
         return self.cursor.fetchall()
     
+    def get_procedures(self) -> List[Dict]:
+        """Get all procedures in the schema."""
+        query = """
+            SELECT 
+                p.proname AS procedure_name,
+                pg_catalog.pg_get_function_arguments(p.oid) AS arguments,
+                pg_catalog.pg_get_functiondef(p.oid) AS procedure_definition,
+                l.lanname AS language,
+                pg_catalog.obj_description(p.oid, 'pg_proc') AS comment
+            FROM pg_catalog.pg_proc p
+            JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+            JOIN pg_catalog.pg_language l ON l.oid = p.prolang
+            WHERE n.nspname = %s
+                AND p.prokind = 'p'  -- procedures only
+            ORDER BY p.proname;
+        """
+        self.cursor.execute(query, (self.schema,))
+        return self.cursor.fetchall()
+    
+    def get_views(self) -> List[Dict]:
+        """Get all views in the schema."""
+        query = """
+            SELECT 
+                c.relname AS view_name,
+                pg_catalog.pg_get_viewdef(c.oid, true) AS view_definition,
+                pg_catalog.obj_description(c.oid, 'pg_class') AS comment
+            FROM pg_catalog.pg_class c
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = %s
+                AND c.relkind = 'v'  -- views only (not materialized views)
+            ORDER BY c.relname;
+        """
+        self.cursor.execute(query, (self.schema,))
+        return self.cursor.fetchall()
+    
+    def get_materialized_views(self) -> List[Dict]:
+        """Get all materialized views in the schema."""
+        query = """
+            SELECT 
+                c.relname AS matview_name,
+                pg_catalog.pg_get_viewdef(c.oid, true) AS matview_definition,
+                pg_catalog.obj_description(c.oid, 'pg_class') AS comment
+            FROM pg_catalog.pg_class c
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = %s
+                AND c.relkind = 'm'  -- materialized views only
+            ORDER BY c.relname;
+        """
+        self.cursor.execute(query, (self.schema,))
+        return self.cursor.fetchall()
+    
     def get_triggers(self, table_name: str = None) -> List[Dict]:
         """Get triggers for a table or all tables."""
         if table_name:
@@ -707,6 +758,24 @@ class PostgresDDLGenerator:
                 
                 ddl_parts.append("")
         
+        # Procedures
+        ddl_parts.append("-- ========================================")
+        ddl_parts.append("-- Procedures")
+        ddl_parts.append("-- ========================================")
+        ddl_parts.append("")
+        
+        procedures = self.get_procedures()
+        for procedure in procedures:
+            if procedure.get('procedure_definition'):
+                ddl_parts.append(procedure['procedure_definition'] + ';')
+                
+                if procedure.get('comment'):
+                    proc_args = procedure.get('arguments', '')
+                    comment_ddl = f"COMMENT ON PROCEDURE \"{self.schema}\".\"{procedure['procedure_name']}\"({proc_args}) IS '{procedure['comment']}';"
+                    ddl_parts.append(comment_ddl)
+                
+                ddl_parts.append("")
+        
         # Tables
         ddl_parts.append("-- ========================================")
         ddl_parts.append("-- Tables")
@@ -741,6 +810,42 @@ class PostgresDDLGenerator:
         for trigger in all_triggers:
             if trigger.get('trigger_definition'):
                 ddl_parts.append(trigger['trigger_definition'] + ';')
+                ddl_parts.append("")
+        
+        # Views
+        ddl_parts.append("-- ========================================")
+        ddl_parts.append("-- Views")
+        ddl_parts.append("-- ========================================")
+        ddl_parts.append("")
+        
+        views = self.get_views()
+        for view in views:
+            if view.get('view_definition'):
+                ddl_parts.append(f'CREATE VIEW "{self.schema}"."{view["view_name"]}" AS')
+                ddl_parts.append(view['view_definition'])
+                
+                if view.get('comment'):
+                    comment_ddl = f"COMMENT ON VIEW \"{self.schema}\".\"{view['view_name']}\" IS '{view['comment']}';"
+                    ddl_parts.append(comment_ddl)
+                
+                ddl_parts.append("")
+        
+        # Materialized Views
+        ddl_parts.append("-- ========================================")
+        ddl_parts.append("-- Materialized Views")
+        ddl_parts.append("-- ========================================")
+        ddl_parts.append("")
+        
+        matviews = self.get_materialized_views()
+        for matview in matviews:
+            if matview.get('matview_definition'):
+                ddl_parts.append(f'CREATE MATERIALIZED VIEW "{self.schema}"."{matview["matview_name"]}" AS')
+                ddl_parts.append(matview['matview_definition'])
+                
+                if matview.get('comment'):
+                    comment_ddl = f"COMMENT ON MATERIALIZED VIEW \"{self.schema}\".\"{matview['matview_name']}\" IS '{matview['comment']}';"
+                    ddl_parts.append(comment_ddl)
+                
                 ddl_parts.append("")
         
         return '\n'.join(ddl_parts)

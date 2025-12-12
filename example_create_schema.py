@@ -177,6 +177,83 @@ def create_example_schema(conn_params):
             (2, '2024-05-20', 149.99, 'Product B');
         """)
         
+        cursor.execute("""
+            INSERT INTO order_items (order_id, product_name, quantity, price) VALUES
+            (1, 'Item 1', 2, 49.99),
+            (2, 'Item 2', 1, 149.99);
+        """)
+        
+        # 12. Create a procedure
+        cursor.execute("""
+            CREATE OR REPLACE PROCEDURE process_order(p_user_id BIGINT, p_amount NUMERIC)
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                INSERT INTO orders (user_id, total_amount, status)
+                VALUES (p_user_id, p_amount, 'pending');
+                
+                RAISE NOTICE 'Order created for user % with amount %', p_user_id, p_amount;
+            END;
+            $$;
+            COMMENT ON PROCEDURE process_order(BIGINT, NUMERIC) IS 'Creates a new order for a user';
+        """)
+        print("✓ Created procedure: process_order")
+        
+        # 13. Create a simple view
+        cursor.execute("""
+            DROP VIEW IF EXISTS user_order_summary CASCADE;
+            CREATE VIEW user_order_summary AS
+            SELECT 
+                u.id AS user_id,
+                u.username,
+                u.email_address,
+                COUNT(o.id) AS total_orders,
+                COALESCE(SUM(o.total_amount), 0) AS total_spent
+            FROM users u
+            LEFT JOIN orders o ON o.user_id = u.id
+            GROUP BY u.id, u.username, u.email_address;
+            COMMENT ON VIEW user_order_summary IS 'Summary of user orders and spending';
+        """)
+        print("✓ Created view: user_order_summary")
+        
+        # 14. Create a materialized view
+        cursor.execute("""
+            DROP MATERIALIZED VIEW IF EXISTS sales_summary CASCADE;
+            CREATE MATERIALIZED VIEW sales_summary AS
+            SELECT 
+                DATE_TRUNC('month', sale_date) AS month,
+                COUNT(*) AS total_sales,
+                SUM(amount) AS total_amount,
+                AVG(amount) AS avg_amount
+            FROM sales
+            GROUP BY DATE_TRUNC('month', sale_date)
+            ORDER BY month;
+            COMMENT ON MATERIALIZED VIEW sales_summary IS 'Monthly sales summary statistics';
+        """)
+        print("✓ Created materialized view: sales_summary")
+        
+        # 15. Create another function (non-trigger)
+        cursor.execute("""
+            CREATE OR REPLACE FUNCTION calculate_user_total(p_user_id BIGINT)
+            RETURNS NUMERIC
+            LANGUAGE plpgsql
+            STABLE
+            AS $$
+            DECLARE
+                v_total NUMERIC;
+            BEGIN
+                SELECT COALESCE(SUM(total_amount), 0)
+                INTO v_total
+                FROM orders
+                WHERE user_id = p_user_id;
+                
+                RETURN v_total;
+            END;
+            $$;
+            COMMENT ON FUNCTION calculate_user_total(BIGINT) IS 'Calculates total order amount for a user';
+        """)
+        print("✓ Created function: calculate_user_total")
+        
         print("\n✅ Example schema created successfully!")
         print("\nYou can now generate DDL using:")
         print(f"python postgres_ddl_generator.py -H {conn_params['host']} -d {conn_params['database']} -U {conn_params['user']} -s test_schema -o example_output.sql")

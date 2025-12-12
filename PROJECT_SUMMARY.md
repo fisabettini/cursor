@@ -51,16 +51,25 @@ A comprehensive Python script for generating DDL (Data Definition Language) stat
 - **Circular dependency handling**: Graceful handling
 - **Referenced tables first**: Ensures proper creation order
 
-### ✅ 6. Triggers and Functions
-- **Function definitions**: Complete with language and volatility
+### ✅ 6. Functions, Procedures, and Triggers
+- **Function definitions**: All functions with complete definitions
+- **Procedure definitions**: Stored procedures (PostgreSQL 11+)
 - **Trigger definitions**: Timing, event, and level
 - **Function-trigger association**: Proper references
+- **Language and volatility**: Complete function attributes
 
-### ✅ 7. Comments
+### ✅ 7. Views
+- **Regular views**: Complete view definitions
+- **Materialized views**: With full SELECT statements
+
+### ✅ 8. Comments
 - Table comments
 - Column comments
 - Type comments
 - Function comments
+- Procedure comments
+- View comments
+- Materialized view comments
 
 ## Implementation Details
 
@@ -68,11 +77,11 @@ A comprehensive Python script for generating DDL (Data Definition Language) stat
 
 The script uses efficient queries against PostgreSQL system catalogs:
 
-- `pg_class` - Tables and relations
+- `pg_class` - Tables, views, and relations
 - `pg_attribute` - Column definitions
 - `pg_constraint` - Constraints (PK, FK)
 - `pg_type` - Data types and user-defined types
-- `pg_proc` - Functions
+- `pg_proc` - Functions and procedures
 - `pg_trigger` - Triggers
 - `pg_enum` - Enum values
 - `pg_sequence` - Sequence information
@@ -95,8 +104,11 @@ The script uses efficient queries against PostgreSQL system catalogs:
 - get_foreign_keys(table_name)
 - get_partition_info(table_name)
 - get_functions()
+- get_procedures()
 - get_triggers(table_name)
 - get_user_types()
+- get_views()
+- get_materialized_views()
 - get_enum_values(type_name)
 - get_composite_type_attributes(type_name)
 - get_domain_info(type_name)
