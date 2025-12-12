@@ -748,6 +748,8 @@ class PostgresDDLGenerator:
             
             if partition_details:
                 ddl.append(f"-- Partition of {parent_table}")
+                # Partitions don't support IF NOT EXISTS in CREATE, use DROP IF EXISTS
+                ddl.append(f'DROP TABLE IF EXISTS "{self.schema}"."{table_name}" CASCADE;')
                 ddl.append(f'CREATE TABLE "{self.schema}"."{table_name}" PARTITION OF "{self.schema}"."{parent_table}"')
                 ddl.append(f"    {partition_details['partition_bound']};")
             
@@ -756,8 +758,8 @@ class PostgresDDLGenerator:
         # Get columns
         columns = self.get_columns(table_name)
         
-        # Build CREATE TABLE statement
-        ddl.append(f'CREATE TABLE "{self.schema}"."{table_name}" (')
+        # Build CREATE TABLE statement with IF NOT EXISTS
+        ddl.append(f'CREATE TABLE IF NOT EXISTS "{self.schema}"."{table_name}" (')
         
         column_defs = []
         for column in columns:
@@ -805,17 +807,27 @@ class PostgresDDLGenerator:
         ref_schema = fk['foreign_schema']
         ref_columns = ', '.join([f'"{col}"' for col in fk['foreign_column_names']])
         
-        ddl = f'ALTER TABLE "{self.schema}"."{table_name}"\n'
-        ddl += f'    ADD CONSTRAINT "{constraint_name}" FOREIGN KEY ({columns})\n'
-        ddl += f'    REFERENCES "{ref_schema}"."{ref_table}" ({ref_columns})'
+        # ALTER TABLE ADD CONSTRAINT doesn't support IF NOT EXISTS
+        # Use DO block to check if constraint exists
+        ddl = f'DO $$ BEGIN\n'
+        ddl += f'    IF NOT EXISTS (\n'
+        ddl += f'        SELECT 1 FROM pg_constraint\n'
+        ddl += f'        WHERE conname = \'{constraint_name}\'\n'
+        ddl += f'        AND connamespace = (SELECT oid FROM pg_namespace WHERE nspname = \'{self.schema}\')\n'
+        ddl += f'    ) THEN\n'
+        ddl += f'        ALTER TABLE "{self.schema}"."{table_name}"\n'
+        ddl += f'        ADD CONSTRAINT "{constraint_name}" FOREIGN KEY ({columns})\n'
+        ddl += f'        REFERENCES "{ref_schema}"."{ref_table}" ({ref_columns})'
         
         if fk['on_update'] != 'NO ACTION':
-            ddl += f"\n    ON UPDATE {fk['on_update']}"
+            ddl += f"\n        ON UPDATE {fk['on_update']}"
         
         if fk['on_delete'] != 'NO ACTION':
-            ddl += f"\n    ON DELETE {fk['on_delete']}"
+            ddl += f"\n        ON DELETE {fk['on_delete']}"
         
-        ddl += ';'
+        ddl += ';\n'
+        ddl += f'    END IF;\n'
+        ddl += f'END $$;'
         
         return ddl
     
@@ -829,10 +841,14 @@ class PostgresDDLGenerator:
         if type_kind == 'enum':
             enum_values = self.get_enum_values(type_name)
             values_str = ', '.join([f"'{val}'" for val in enum_values])
+            # ENUMs don't support CREATE OR REPLACE, use DROP IF EXISTS
+            ddl.append(f'DROP TYPE IF EXISTS "{self.schema}"."{type_name}" CASCADE;')
             ddl.append(f'CREATE TYPE "{self.schema}"."{type_name}" AS ENUM ({values_str});')
         
         elif type_kind == 'composite':
             attributes = self.get_composite_type_attributes(type_name)
+            # Composite types don't support CREATE OR REPLACE
+            ddl.append(f'DROP TYPE IF EXISTS "{self.schema}"."{type_name}" CASCADE;')
             ddl.append(f'CREATE TYPE "{self.schema}"."{type_name}" AS (')
             attr_defs = []
             for attr in attributes:
@@ -842,6 +858,8 @@ class PostgresDDLGenerator:
         
         elif type_kind == 'domain':
             domain_info = self.get_domain_info(type_name)
+            # Domains don't support CREATE OR REPLACE
+            ddl.append(f'DROP DOMAIN IF EXISTS "{self.schema}"."{type_name}" CASCADE;')
             domain_ddl = f'CREATE DOMAIN "{self.schema}"."{type_name}" AS {domain_info["base_type"]}'
             
             if domain_info['is_not_null']:
@@ -863,10 +881,22 @@ class PostgresDDLGenerator:
     
     def generate_index_ddl(self, index: Dict) -> str:
         """Generate DDL for an index."""
-        ddl = index['index_definition'] + ';'
+        index_name = index['index_name']
+        index_def = index['index_definition']
+        
+        # Add IF NOT EXISTS to the index definition
+        # Replace "CREATE INDEX" or "CREATE UNIQUE INDEX" with IF NOT EXISTS version
+        if index_def.startswith('CREATE UNIQUE INDEX'):
+            ddl = index_def.replace('CREATE UNIQUE INDEX', 'CREATE UNIQUE INDEX IF NOT EXISTS', 1)
+        elif index_def.startswith('CREATE INDEX'):
+            ddl = index_def.replace('CREATE INDEX', 'CREATE INDEX IF NOT EXISTS', 1)
+        else:
+            ddl = index_def
+        
+        ddl += ';'
         
         if index.get('comment'):
-            ddl += f"\nCOMMENT ON INDEX \"{self.schema}\".\"{index['index_name']}\" IS '{index['comment']}';"
+            ddl += f"\nCOMMENT ON INDEX \"{self.schema}\".\"{index_name}\" IS '{index['comment']}';"
         
         return ddl
     
@@ -874,7 +904,7 @@ class PostgresDDLGenerator:
         """Generate DDL for a standalone sequence."""
         seq_name = sequence['sequence_name']
         
-        ddl = f'CREATE SEQUENCE "{self.schema}"."{seq_name}"'
+        ddl = f'CREATE SEQUENCE IF NOT EXISTS "{self.schema}"."{seq_name}"'
         
         if sequence.get('data_type') and sequence['data_type'] != 'bigint':
             ddl += f" AS {sequence['data_type']}"
@@ -909,7 +939,9 @@ class PostgresDDLGenerator:
         table_name = ftable['foreign_table_name']
         server_name = ftable['server_name']
         
-        ddl = f'CREATE FOREIGN TABLE "{self.schema}"."{table_name}" (\n'
+        # Foreign tables don't support IF NOT EXISTS, use DROP IF EXISTS
+        ddl = f'DROP FOREIGN TABLE IF EXISTS "{self.schema}"."{table_name}" CASCADE;\n'
+        ddl += f'CREATE FOREIGN TABLE "{self.schema}"."{table_name}" (\n'
         
         column_defs = []
         if ftable['column_names'] and ftable['column_types']:
@@ -1202,7 +1234,16 @@ class PostgresDDLGenerator:
         all_triggers = self.get_triggers()
         for trigger in all_triggers:
             if trigger.get('trigger_definition'):
-                ddl_parts.append(trigger['trigger_definition'] + ';')
+                # Triggers don't support IF NOT EXISTS, use CREATE OR REPLACE or DROP IF EXISTS
+                trigger_def = trigger['trigger_definition']
+                trigger_name = trigger.get('trigger_name', '')
+                table_name_in_trigger = trigger.get('table_name', '')
+                
+                # Add DROP IF EXISTS before CREATE TRIGGER
+                if trigger_name and table_name_in_trigger:
+                    ddl_parts.append(f'DROP TRIGGER IF EXISTS "{trigger_name}" ON "{self.schema}"."{table_name_in_trigger}" CASCADE;')
+                
+                ddl_parts.append(trigger_def + ';')
                 ddl_parts.append("")
         
         # Views
@@ -1214,7 +1255,8 @@ class PostgresDDLGenerator:
         views = self.get_views()
         for view in views:
             if view.get('view_definition'):
-                ddl_parts.append(f'CREATE VIEW "{self.schema}"."{view["view_name"]}" AS')
+                # Use CREATE OR REPLACE VIEW
+                ddl_parts.append(f'CREATE OR REPLACE VIEW "{self.schema}"."{view["view_name"]}" AS')
                 ddl_parts.append(view['view_definition'])
                 
                 if view.get('comment'):
@@ -1232,6 +1274,8 @@ class PostgresDDLGenerator:
         matviews = self.get_materialized_views()
         for matview in matviews:
             if matview.get('matview_definition'):
+                # Materialized views don't support CREATE OR REPLACE, use DROP IF EXISTS
+                ddl_parts.append(f'DROP MATERIALIZED VIEW IF EXISTS "{self.schema}"."{matview["matview_name"]}" CASCADE;')
                 ddl_parts.append(f'CREATE MATERIALIZED VIEW "{self.schema}"."{matview["matview_name"]}" AS')
                 ddl_parts.append(matview['matview_definition'])
                 
