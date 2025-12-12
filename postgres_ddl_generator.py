@@ -477,17 +477,40 @@ class PostgresDDLGenerator:
         """Get options for a specific foreign table."""
         query = """
             SELECT 
-                option_name,
-                option_value
-            FROM pg_catalog.pg_options_to_table(
-                (SELECT ftrelid FROM pg_catalog.pg_foreign_table ft
-                 JOIN pg_catalog.pg_class c ON c.oid = ft.ftrelid
-                 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                 WHERE n.nspname = %s AND c.relname = %s)
-            );
+                (pg_catalog.pg_options_to_table(ft.ftoptions)).*
+            FROM pg_catalog.pg_foreign_table ft
+            JOIN pg_catalog.pg_class c ON c.oid = ft.ftrelid
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = %s 
+                AND c.relname = %s;
         """
-        self.cursor.execute(query, (self.schema, foreign_table_name))
-        return self.cursor.fetchall()
+        try:
+            self.cursor.execute(query, (self.schema, foreign_table_name))
+            return self.cursor.fetchall()
+        except Exception as e:
+            # Fallback: parse options array directly if pg_options_to_table doesn't work
+            query_fallback = """
+                SELECT 
+                    ft.ftoptions
+                FROM pg_catalog.pg_foreign_table ft
+                JOIN pg_catalog.pg_class c ON c.oid = ft.ftrelid
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = %s 
+                    AND c.relname = %s;
+            """
+            self.cursor.execute(query_fallback, (self.schema, foreign_table_name))
+            result = self.cursor.fetchone()
+            
+            # Parse the options array manually
+            options = []
+            if result and result.get('ftoptions'):
+                for opt_str in result['ftoptions']:
+                    # Format is 'key=value'
+                    if '=' in opt_str:
+                        key, value = opt_str.split('=', 1)
+                        options.append({'option_name': key, 'option_value': value})
+            
+            return options
     
     def get_extensions(self) -> List[Dict]:
         """Get all extensions."""
@@ -896,11 +919,15 @@ class PostgresDDLGenerator:
         ddl += ',\n'.join(column_defs)
         ddl += f'\n) SERVER "{server_name}"'
         
-        # Add foreign table options
-        options = self.get_foreign_table_options(table_name)
-        if options:
-            option_strs = [f"{opt['option_name']} '{opt['option_value']}'" for opt in options]
-            ddl += '\nOPTIONS (' + ', '.join(option_strs) + ')'
+        # Add foreign table options (with error handling)
+        try:
+            options = self.get_foreign_table_options(table_name)
+            if options:
+                option_strs = [f"{opt['option_name']} '{opt['option_value']}'" for opt in options]
+                ddl += '\nOPTIONS (' + ', '.join(option_strs) + ')'
+        except Exception as e:
+            # If options can't be retrieved, continue without them
+            print(f"Warning: Could not retrieve options for foreign table {table_name}: {e}", file=sys.stderr)
         
         ddl += ';'
         
@@ -1133,10 +1160,16 @@ class PostgresDDLGenerator:
         ddl_parts.append("-- ========================================")
         ddl_parts.append("")
         
-        foreign_tables = self.get_foreign_tables()
-        for ftable in foreign_tables:
-            ddl_parts.append(self.generate_foreign_table_ddl(ftable))
-            ddl_parts.append("")
+        try:
+            foreign_tables = self.get_foreign_tables()
+            for ftable in foreign_tables:
+                try:
+                    ddl_parts.append(self.generate_foreign_table_ddl(ftable))
+                    ddl_parts.append("")
+                except Exception as e:
+                    print(f"Warning: Could not generate DDL for foreign table {ftable.get('foreign_table_name', 'unknown')}: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Could not retrieve foreign tables: {e}", file=sys.stderr)
         
         # Indexes
         ddl_parts.append("-- ========================================")
@@ -1214,23 +1247,29 @@ class PostgresDDLGenerator:
         ddl_parts.append("-- ========================================")
         ddl_parts.append("")
         
-        # Table/View grants
-        table_grants = self.get_table_grants()
-        grant_ddls = self.generate_grant_ddl(table_grants, 'table')
-        for grant_ddl in grant_ddls:
-            ddl_parts.append(grant_ddl)
+        try:
+            # Table/View grants
+            table_grants = self.get_table_grants()
+            grant_ddls = self.generate_grant_ddl(table_grants, 'table')
+            for grant_ddl in grant_ddls:
+                ddl_parts.append(grant_ddl)
+            
+            if grant_ddls:
+                ddl_parts.append("")
+        except Exception as e:
+            print(f"Warning: Could not retrieve table grants: {e}", file=sys.stderr)
         
-        if grant_ddls:
-            ddl_parts.append("")
-        
-        # Sequence grants
-        seq_grants = self.get_sequence_grants()
-        seq_grant_ddls = self.generate_grant_ddl(seq_grants, 'sequence')
-        for grant_ddl in seq_grant_ddls:
-            ddl_parts.append(grant_ddl)
-        
-        if seq_grant_ddls:
-            ddl_parts.append("")
+        try:
+            # Sequence grants
+            seq_grants = self.get_sequence_grants()
+            seq_grant_ddls = self.generate_grant_ddl(seq_grants, 'sequence')
+            for grant_ddl in seq_grant_ddls:
+                ddl_parts.append(grant_ddl)
+            
+            if seq_grant_ddls:
+                ddl_parts.append("")
+        except Exception as e:
+            print(f"Warning: Could not retrieve sequence grants: {e}", file=sys.stderr)
         
         return '\n'.join(ddl_parts)
 
